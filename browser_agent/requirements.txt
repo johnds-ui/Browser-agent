@@ -1,0 +1,26 @@
+# Browser Automation Agent — Python dependencies
+#
+# Install with:
+#   pip install -r requirements.txt
+#   playwright install chromium
+
+# Async HTTP (retained for aiohttp usage in tests / optional tooling)
+aiohttp>=3.9.0
+
+# LLM providers
+anthropic>=0.25.0            # Claude
+openai>=1.30.0               # Azure OpenAI GPT-4o
+google-genai>=1.10.0          # Gemini Flash (new SDK)
+
+# Pydantic v2 for all data models
+pydantic>=2.6.0
+
+# Playwright — browser automation + CDP hybrid
+playwright>=1.44.0
+
+# .env file loading
+python-dotenv>=1.0.0
+
+# HTTP API server (FastAPI + uvicorn)
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
