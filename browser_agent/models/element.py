@@ -33,6 +33,16 @@ class ElementFingerprint(BaseModel):
         description="innerText of the nearest ancestor element that has non-empty text",
     )
 
+    value: str | None = Field(
+        None,
+        description="Current value of input/textarea/select — shows what is already filled",
+    )
+
+    label_text: str | None = Field(
+        None,
+        description="Text of the associated <label> element for this field",
+    )
+
     # ------------------------------------------------------------------ helpers
 
     @property
@@ -55,7 +65,12 @@ class ElementFingerprint(BaseModel):
         return {
             "index": self.index,
             "tag": self.tag,
+            "type": self.type,
             "text": self.text,
+            "label_text": self.label_text,
             "aria_label": self.aria_label,
             "placeholder": self.placeholder,
+            "value": self.value,
+            "name": self.attributes.get("name"),
+            "id": self.attributes.get("id"),
         }

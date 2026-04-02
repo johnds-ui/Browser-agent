@@ -55,6 +55,22 @@ RULES:
 - For navigate actions, set value to the full URL (include https://).
 - For key_press, use standard key names: "Enter", "Tab", "Escape", \
   "ArrowDown", "ArrowUp", etc.
+
+FIELD IDENTIFICATION (critical for forms):
+- Each element includes: tag, type, label_text, placeholder, aria_label, value, name, id.
+- Match form fields to task requirements using label_text FIRST, then placeholder, \
+  then aria_label — these uniquely identify what each field expects.
+- If an element's "value" field is non-empty, that field is ALREADY FILLED — \
+  do NOT type into it again; move on to the next unfilled field.
+- Carefully distinguish fields: "First Name" vs "City" vs "Email" are all \
+  different input fields — match each piece of data to the correct field label.
+
+AVOIDING DUPLICATES:
+- Before issuing a "type" action, check the history to confirm you have not \
+  already successfully typed into that element.
+- If a field's current "value" in the state is already set to the correct data, \
+  skip it entirely.
+- Never re-execute an action that already succeeded in a prior step.
 """
 
 
@@ -64,7 +80,7 @@ RULES:
 
 def build_prompt(history: list[BrowserState]) -> str:
     """Construct the user-turn message from the history window."""
-    recent = history[-10:]
+    recent = history[-6:]   # keep last 6 steps — enough context, fewer tokens
     current = recent[-1]
 
     # Current state — include full elements list

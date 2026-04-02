@@ -123,10 +123,15 @@ class AgentOrchestrator:
         last_result: str = "success"
         scope: str = ""
         next_plan: str = ""
+        _cached_elements: list[ElementFingerprint] = []
 
         while self.retry_count < self._max_retries:
-            # 1. Extract DOM
-            elements = await self._extractor.extract()
+            # 1. Extract DOM — skip if DOM unchanged (cheaper hash check first)
+            if not _cached_elements or await self._extractor.dom_changed():
+                elements = await self._extractor.extract()
+                _cached_elements = elements
+            else:
+                elements = _cached_elements
 
             # 2. Build state
             state = await self._builder.build(
@@ -171,6 +176,10 @@ class AgentOrchestrator:
             # 5. Execute action
             result_str, failed_fp = await self._executor.execute(action, state)
             last_action = action
+
+            # Invalidate DOM cache for actions that mutate the page
+            if action.action in {"navigate", "click", "type", "select", "key_press"}:
+                _cached_elements = []
 
             if result_str == "success":
                 last_result = "success"
