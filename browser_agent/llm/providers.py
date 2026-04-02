@@ -227,6 +227,13 @@ class _GroqBase(LLMProvider):
     model_id: str = "llama-3.3-70b-versatile"
     display_name: str = "Groq"
 
+    # All free Groq models in fallback order — tried sequentially on 429
+    _GROQ_FALLBACK_MODELS: list[str] = [
+        "llama-3.3-70b-versatile",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "moonshotai/kimi-k2-instruct",
+    ]
+
     def __init__(self) -> None:
         from openai import AsyncOpenAI  # noqa: PLC0415
 
@@ -241,7 +248,50 @@ class _GroqBase(LLMProvider):
             base_url="https://api.groq.com/openai/v1",
         )
 
+    async def _call_groq(self, model: str, oai_messages: list[dict]) -> str:
+        """Call a specific Groq model and return the raw text response."""
+        response = await self._client.chat.completions.create(
+            model=model,
+            max_tokens=1024,
+            response_format={"type": "json_object"},
+            messages=oai_messages,
+        )
+        return (response.choices[0].message.content or "").strip()
+
     async def predict(self, system: str, messages: list[dict]) -> CDPAction:
+        oai_messages = [{"role": "system", "content": system}, *messages]
+
+        # Build the rotation: start from this model, then try the rest in order
+        fallback_chain = [self.model_id] + [
+            m for m in self._GROQ_FALLBACK_MODELS if m != self.model_id
+        ]
+
+        last_error: Exception | None = None
+        for model in fallback_chain:
+            try:
+                raw = await self._call_groq(model, oai_messages)
+                if model != self.model_id:
+                    logger.info("Groq fallback succeeded with model: %s", model)
+                logger.debug("%s raw response: %s", model, raw[:300])
+                return _parse_cdp_action(raw)
+            except Exception as exc:
+                err_str = str(exc)
+                if "429" in err_str or "rate_limit" in err_str.lower() or "rate limit" in err_str.lower():
+                    logger.warning(
+                        "Groq rate limit on %s — trying next model. Error: %s",
+                        model, err_str[:120],
+                    )
+                    last_error = exc
+                    continue
+                # Non-rate-limit error — re-raise immediately
+                raise
+
+        raise RuntimeError(
+            f"All Groq models hit rate limits. Last error: {last_error}"
+        ) from last_error
+
+    async def _predict_legacy(self, system: str, messages: list[dict]) -> CDPAction:
+        """Kept for reference — direct single-model call without fallback."""
         oai_messages = [{"role": "system", "content": system}, *messages]
         response = await self._client.chat.completions.create(
             model=self.model_id,

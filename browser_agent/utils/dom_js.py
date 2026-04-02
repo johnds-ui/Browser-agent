@@ -62,6 +62,19 @@ DOM_EXTRACT_JS = r"""
     return null;
   }
 
+  function getLabelText(el) {
+    if (el.id) {
+      const lbl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+      if (lbl) return (lbl.innerText || '').trim().slice(0, 60);
+    }
+    let cur = el.parentElement;
+    while (cur && cur !== document.body) {
+      if (cur.tagName === 'LABEL') return (cur.innerText || '').trim().slice(0, 60);
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
   function isVisible(el) {
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return false;
@@ -79,13 +92,17 @@ DOM_EXTRACT_JS = r"""
     const attrs = {};
     for (const a of el.attributes) attrs[a.name] = a.value;
 
+    const tag = el.tagName.toLowerCase();
+    const hasValue = tag === 'input' || tag === 'textarea' || tag === 'select';
     return {
       index: i,
-      tag: el.tagName.toLowerCase(),
+      tag: tag,
       type: el.getAttribute('type') || null,
       text: (el.innerText || '').trim().slice(0, 80) || null,
       placeholder: el.getAttribute('placeholder') || null,
       aria_label: el.getAttribute('aria-label') || null,
+      label_text: getLabelText(el),
+      value: hasValue ? (el.value || null) : null,
       css_selector: computeCssSelector(el),
       xpath: computeXPath(el),
       bbox: { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },

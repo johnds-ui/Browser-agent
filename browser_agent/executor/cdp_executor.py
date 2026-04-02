@@ -25,7 +25,7 @@ from browser_agent.utils.dom_js import SELECT_OPTION_JS
 logger = logging.getLogger(__name__)
 
 # Seconds to wait after an interaction when Playwright load-state times out
-_DEFAULT_SETTLE_TIMEOUT = 1.5
+_DEFAULT_SETTLE_TIMEOUT = 0.8
 # Pixel delta used when scroll_amount is not specified
 _DEFAULT_SCROLL_PX = 300
 
@@ -89,8 +89,14 @@ class CDPExecutor:
             return _result(False, "navigate action missing value/URL"), None
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
-        # Playwright handles navigation + waits for networkidle
-        await self._session.page.goto(url, wait_until="networkidle", timeout=30_000)
+        # Use 'load' event — fires after DOM + critical resources, faster than networkidle
+        try:
+            await self._session.page.goto(url, wait_until="load", timeout=30_000)
+        except Exception:
+            # If load event times out (some pages never fire it), proceed anyway
+            pass
+        # Brief settle for SPA JS rendering
+        await asyncio.sleep(0.8)
         return "success", None
 
     async def _click(
@@ -125,7 +131,15 @@ class CDPExecutor:
 
         text = action.value or ""
 
-        # Scroll into view then click-to-focus via raw CDP mouse events
+        # Primary path: page.fill() clears existing value then types — handles React/Vue
+        try:
+            await self._session.page.fill(fp.css_selector, text, timeout=3_000)
+            await asyncio.sleep(0.1)
+            return "success", None
+        except Exception:
+            pass
+
+        # Fallback: scroll into view, CDP click to focus, select-all, then type
         await self._scroll_into_view(fp)
         x, y = fp.center_x, fp.center_y
         for event_type in ("mouseMoved", "mousePressed", "mouseReleased"):
@@ -133,10 +147,10 @@ class CDPExecutor:
                 "Input.dispatchMouseEvent",
                 {"type": event_type, "x": x, "y": y, "button": "left", "clickCount": 1},
             )
-
-        # Type via Playwright keyboard — reliable across React/Vue/native inputs
+        # Select all existing text so new text replaces it (prevents appending duplicates)
+        await self._session.page.keyboard.press("Control+a")
         await self._session.page.keyboard.type(text, delay=20)
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.1)
         return "success", None
 
     async def _scroll(
@@ -164,7 +178,7 @@ class CDPExecutor:
             "Input.dispatchMouseEvent",
             {"type": "mouseWheel", "x": x, "y": y, "deltaX": delta_x, "deltaY": delta_y},
         )
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.2)
         return "success", None
 
     async def _wait(
@@ -202,7 +216,7 @@ class CDPExecutor:
         if not success_val:
             return _result(False, "select: element not found or option not available"), fp
 
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.1)
         return "success", None
 
     async def _key_press(
@@ -242,7 +256,7 @@ class CDPExecutor:
                 f"document.querySelector({json_str(fp.css_selector)})"
                 f"?.scrollIntoView({{behavior:'instant',block:'center'}})"
             )
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.05)
         except Exception as exc:
             logger.debug("scrollIntoView failed for %s: %s", fp.css_selector, exc)
 
