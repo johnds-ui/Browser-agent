@@ -181,6 +181,7 @@ async def _run_agent(session_id: str, task: str, model_key: str) -> None:
 
         async def run(self):  # type: ignore[override]
             from browser_agent.utils.url_detector import extract_url
+            from browser_agent.utils.direct_link import find_direct_link_for_task
             from browser_agent.models.cdp_action import CDPAction
 
             url = extract_url(self.task)
@@ -218,6 +219,30 @@ async def _run_agent(session_id: str, task: str, model_key: str) -> None:
 
                 # Push state to WebSocket queue
                 await queue.put(_serialize_state(state, "running"))
+
+                redirect_url = find_direct_link_for_task(
+                    task=self.task,
+                    state=state,
+                    attempted_urls=self._auto_redirected_urls,
+                )
+                if redirect_url:
+                    redirect_action = CDPAction(
+                        action="navigate",
+                        value=redirect_url,
+                        element_index=None,
+                        scroll_direction=None,
+                        scroll_amount=None,
+                        reason="Direct link matched the requested click target; navigating before planner inference",
+                    )
+                    logger.info("Auto-redirecting directly to matched link: %s", redirect_url)
+                    result_str, _ = await self._executor.execute(redirect_action, state)
+                    self._auto_redirected_urls.add(redirect_url)
+                    last_action = redirect_action
+                    last_result = result_str
+
+                    if result_str != "success":
+                        self.retry_count += 1
+                    continue
 
                 try:
                     action = await self._planner.predict(self.history)
