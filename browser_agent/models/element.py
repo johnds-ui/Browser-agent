@@ -38,6 +38,11 @@ class ElementFingerprint(BaseModel):
         description="Current value of input/textarea/select — shows what is already filled",
     )
 
+    link_url: str | None = Field(
+        None,
+        description="Resolved navigation target when the element or its nearest link has a URL",
+    )
+
     label_text: str | None = Field(
         None,
         description="Text of the associated <label> element for this field",
@@ -67,6 +72,7 @@ class ElementFingerprint(BaseModel):
             "tag": self.tag,
             "type": self.type,
             "text": self.text,
+            "link_url": self.link_url,
             "label_text": self.label_text,
             "aria_label": self.aria_label,
             "placeholder": self.placeholder,

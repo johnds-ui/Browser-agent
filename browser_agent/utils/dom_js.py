@@ -75,6 +75,20 @@ DOM_EXTRACT_JS = r"""
     return null;
   }
 
+  function getLinkUrl(el) {
+    if (typeof el.href === 'string' && el.href) return el.href;
+
+    const nearestAnchor = el.closest('a[href]');
+    if (nearestAnchor && nearestAnchor.href) return nearestAnchor.href;
+
+    for (const attrName of ['href', 'data-href', 'data-url', 'data-link']) {
+      const attrValue = el.getAttribute(attrName);
+      if (attrValue) return attrValue;
+    }
+
+    return null;
+  }
+
   function isVisible(el) {
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return false;
@@ -103,6 +117,7 @@ DOM_EXTRACT_JS = r"""
       aria_label: el.getAttribute('aria-label') || null,
       label_text: getLabelText(el),
       value: hasValue ? (el.value || null) : null,
+      link_url: getLinkUrl(el),
       css_selector: computeCssSelector(el),
       xpath: computeXPath(el),
       bbox: { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },

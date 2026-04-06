@@ -106,6 +106,7 @@ class DOMExtractor:
             aria_label=raw.get("aria_label") or None,
             label_text=raw.get("label_text") or None,
             value=raw.get("value") or None,
+            link_url=raw.get("link_url") or None,
             css_selector=str(raw.get("css_selector", "unknown")),
             xpath=str(raw.get("xpath", "/unknown")),
             bbox=bbox,

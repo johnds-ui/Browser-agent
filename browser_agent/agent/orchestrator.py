@@ -30,6 +30,7 @@ from browser_agent.models.browser_state import BrowserState
 from browser_agent.models.cdp_action import CDPAction
 from browser_agent.models.element import ElementFingerprint
 from browser_agent.state.builder import StateBuilder
+from browser_agent.utils.direct_link import find_direct_link_for_task
 from browser_agent.utils.url_detector import extract_url
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ class AgentOrchestrator:
         # State
         self.history: list[BrowserState] = []
         self.retry_count: int = 0
+        self._auto_redirected_urls: set[str] = set()
 
     # ------------------------------------------------------------------
     # Main loop
@@ -144,6 +146,31 @@ class AgentOrchestrator:
                 next_plan=next_plan,
             )
             self.history.append(state)
+
+            redirect_url = find_direct_link_for_task(
+                task=self.task,
+                state=state,
+                attempted_urls=self._auto_redirected_urls,
+            )
+            if redirect_url:
+                redirect_action = CDPAction(
+                    action="navigate",
+                    value=redirect_url,
+                    element_index=None,
+                    scroll_direction=None,
+                    scroll_amount=None,
+                    reason="Direct link matched the requested click target; navigating before planner inference",
+                )
+                logger.info("Auto-redirecting directly to matched link: %s", redirect_url)
+                result_str, _ = await self._executor.execute(redirect_action, state)
+                self._auto_redirected_urls.add(redirect_url)
+                last_action = redirect_action
+                last_result = result_str
+                _cached_elements = []
+
+                if result_str != "success":
+                    self.retry_count += 1
+                continue
 
             # 3. LLM prediction
             try:
